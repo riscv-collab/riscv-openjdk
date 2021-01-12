@@ -2940,22 +2940,22 @@ void MacroAssembler::eden_allocate(Register obj,
 
 // get_thread() can be called anywhere inside generated code so we
 // need to save whatever non-callee save context might get clobbered
-// by the call to Thread::current() or, indeed, the call setup code.
+// by the call to JavaThread::riscv64_get_thread_helper() or, indeed,
+// the call setup code.
 //
-// FIXME: RISC-V does not yet support TLSDESC (Thread-Local Storage
-// Descriptors), once supported, we should repalce Thread::current
-// with JavaThread::riscv64_get_thread_helper() to reduce the clbber
-// of non-callee save context.
+// riscv64_get_thread_helper() clobbers only x10.
+//
 void MacroAssembler::get_thread(Register thread) {
-  // save all call-clobbered regs except thread
-  RegSet saved_regs = RegSet::range(x5, x7) + RegSet::range(x10, x17) +
-                      RegSet::range(x28, x31) + lr - thread;
+  RegSet saved_regs = RegSet::of(x10) + lr - thread;
   push_reg(saved_regs, sp);
 
-  call_VM_leaf_base(CAST_FROM_FN_PTR(address, Thread::current), 0);
-  mv(thread, x10); // x10 is function call_vm_leaf_base return value, return java_thread value.
+  int32_t offset = 0;
+  movptr_with_offset(lr, CAST_FROM_FN_PTR(address, JavaThread::riscv64_get_thread_helper), offset);
+  jalr(lr, lr, offset);
+  if (thread != x10) {
+    mv(thread, x10);
+  }
 
-  // restore pushed registers
   pop_reg(saved_regs, sp);
 }
 
