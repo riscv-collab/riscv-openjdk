@@ -44,7 +44,7 @@ enum {
   pd_nof_fpu_regs_frame_map = FloatRegisterImpl::number_of_registers,  // number of float registers used during code emission
 
   // caller saved
-  pd_nof_caller_save_cpu_regs_frame_map = 14, // number of registers killed by calls
+  pd_nof_caller_save_cpu_regs_frame_map = 13, // number of registers killed by calls
   pd_nof_caller_save_fpu_regs_frame_map = 32, // number of float registers killed by calls
 
   pd_first_callee_saved_reg = pd_nof_caller_save_cpu_regs_frame_map,
