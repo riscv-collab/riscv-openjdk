@@ -38,7 +38,7 @@ define_pd_global(bool, TrapBasedNullChecks,      false);
 define_pd_global(bool, UncommonNullCast,         true);  // Uncommon-trap NULLs past to check cast
 
 define_pd_global(uintx, CodeCacheSegmentSize,    64 COMPILER1_AND_COMPILER2_PRESENT(+64)); // Tiered compilation has large code-entry alignment.
-define_pd_global(intx, CodeEntryAlignment,       64);
+define_pd_global(intx, CodeEntryAlignment,       16);
 define_pd_global(intx, OptoLoopAlignment,        16);
 define_pd_global(intx, InlineFrequencyCount,     100);
 
@@ -94,6 +94,7 @@ define_pd_global(intx, InlineSmallCode,          2500);
           "Extend i for r and o for w in the pred/succ flags of fence;" \
           "Extend fence.i to fence.i + fence.")                         \
   product(bool, UseVExt, false, "Use RVV instructions")                 \
+  product(bool, UseCExt, false, "Use RVC instructions")                 \
   product(bool, AvoidUnalignedAccesses, true,                           \
           "Avoid generating unaligned memory accesses")                 \
 

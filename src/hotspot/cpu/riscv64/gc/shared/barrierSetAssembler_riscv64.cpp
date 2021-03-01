@@ -184,7 +184,7 @@ void BarrierSetAssembler::eden_allocate(MacroAssembler* masm, Register obj,
     // Get the current top of the heap
     ExternalAddress address_top((address) Universe::heap()->top_addr());
     __ la_patchable(tmp, address_top, offset);
-    __ addi(tmp, tmp, offset);
+    __ addi_nc(tmp, tmp, offset);
     __ lr_d(obj, tmp, Assembler::aqrl);
 
     // Adjust it my the size of our new object
@@ -202,7 +202,7 @@ void BarrierSetAssembler::eden_allocate(MacroAssembler* masm, Register obj,
     ExternalAddress address_end((address) Universe::heap()->end_addr());
     offset = 0;
     __ la_patchable(heap_end, address_end, offset);
-    __ ld(heap_end, Address(heap_end, offset));
+    __ ld_nc(heap_end, Address(heap_end, offset));
 
     __ bgtu(end, heap_end, slow_case, is_far);
 
@@ -229,12 +229,17 @@ void BarrierSetAssembler::incr_allocated_bytes(MacroAssembler* masm,
   __ sd(tmp1, Address(xthread, in_bytes(JavaThread::allocated_bytes_offset())));
 }
 
+extern int nmethod_barrier_guard_offset();
+
 void BarrierSetAssembler::nmethod_entry_barrier(MacroAssembler* masm) {
   BarrierSetNMethod* bs_nm = BarrierSet::barrier_set()->barrier_set_nmethod();
 
   if (bs_nm == NULL) {
     return;
   }
+
+  // RISCV's amoswap instructions need an alignment for the memory address it swaps
+  while ((__ offset() + nmethod_barrier_guard_offset()) % 4 != 0) { __ nop(); }
 
   Label skip, guard;
   Address thread_disarmed_addr(xthread, in_bytes(bs_nm->thread_disarmed_offset()));
@@ -248,11 +253,13 @@ void BarrierSetAssembler::nmethod_entry_barrier(MacroAssembler* masm) {
   __ beq(t0, t1, skip);
 
   int32_t offset = 0;
-  __ movptr_with_offset(t0, StubRoutines::riscv64::method_entry_barrier(), offset);
-  __ jalr(lr, t0, offset);
+  __ movptr_with_offset(t0, StubRoutines::riscv64::method_entry_barrier(), offset, false);
+  __ jalr_nc(lr, t0, offset);
   __ j(skip);
 
   __ bind(guard);
+
+  assert(__ offset() % 4 == 0, "RISCV CAS needs an alignment for memory");
 
   __ emit_int32(0); // nmethod guard value. Skipped over in common case.
 

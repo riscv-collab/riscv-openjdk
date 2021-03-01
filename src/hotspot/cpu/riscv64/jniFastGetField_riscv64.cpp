@@ -76,7 +76,7 @@ address JNI_FastGetField::generate_fast_get_int_field0(BasicType type) {
   Label slow;
   int32_t offset = 0;
   __ la_patchable(rcounter_addr, SafepointSynchronize::safepoint_counter_addr(), offset);
-  __ addi(rcounter_addr, rcounter_addr, offset);
+  __ addi_nc(rcounter_addr, rcounter_addr, offset);
 
   Address safepoint_counter_addr(rcounter_addr, 0);
   __ lwu(rcounter, safepoint_counter_addr);
@@ -171,7 +171,7 @@ address JNI_FastGetField::generate_fast_get_int_field0(BasicType type) {
     __ enter();
     int32_t tmp_offset = 0;
     __ la_patchable(t0, ExternalAddress(slow_case_addr), tmp_offset);
-    __ jalr(x1, t0, tmp_offset);
+    __ jalr_nc(x1, t0, tmp_offset);
     __ leave();
     __ ret();
   }
