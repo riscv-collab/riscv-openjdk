@@ -279,6 +279,13 @@ bool PosixSignals::pd_hotspot_signal_handler(int sig, siginfo_t* info,
       }
     }
 
+    if (sig == SIGILL && VM_Version::is_checkcext_fault(pc)) {
+      os::Posix::ucontext_set_pc(uc, VM_Version::continuation_for_checkcext_fault(pc));
+      warning("RVC is not supported on this CPU");
+      FLAG_SET_DEFAULT(UseCExt, false);
+      return true;
+    }
+
     if (sig == SIGILL && VM_Version::is_checkvext_fault(pc)) {
       os::Posix::ucontext_set_pc(uc, VM_Version::continuation_for_checkvext_fault(pc));
       return true;

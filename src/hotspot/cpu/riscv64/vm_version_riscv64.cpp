@@ -73,14 +73,19 @@
 int VM_Version::_initial_vector_length = 0;
 address VM_Version::_checkvext_fault_pc = NULL;
 address VM_Version::_checkvext_continuation_pc = NULL;
+address VM_Version::_checkcext_fault_pc = NULL;
+address VM_Version::_checkcext_continuation_pc = NULL;
 
-static BufferBlob* stub_blob;
+static BufferBlob* rvv_blob;
+static BufferBlob* rvc_blob;
 static const int stub_size = 550;
 
 extern "C" {
   typedef int (*getPsrInfo_stub_t)();
+  typedef void (*getRVCInfo_stub_t)();
 }
 static getPsrInfo_stub_t getPsrInfo_stub = NULL;
+static getRVCInfo_stub_t getRVCInfo_stub = NULL;
 
 
 class VM_Version_StubGenerator: public StubCodeGenerator {
@@ -100,6 +105,26 @@ class VM_Version_StubGenerator: public StubCodeGenerator {
     // read vlenb from CSR_VLENB, may sigill
     *fault_pc = __ pc();
     __ csrr(x10, CSR_VLENB);
+
+    *continuation_pc = __ pc();
+    __ leave();
+    __ ret();
+
+#   undef __
+
+    return start;
+  }
+
+  address generate_getRVCInfo(address* fault_pc, address* continuation_pc) {
+    StubCodeMark mark(this, "VM_Version", "getRVCInfo_stub");
+#   define __ _masm->
+    address start = __ pc();
+
+    __ enter();
+
+    // test a compressed instruction, may sigill
+    *fault_pc = __ pc();
+    __ c_nop();
 
     *continuation_pc = __ pc();
     __ leave();
@@ -180,17 +205,37 @@ void VM_Version::get_processor_features() {
     FLAG_SET_DEFAULT(UseMD5Intrinsics, false);
   }
 
+  // compressed instruction extension
+  if (FLAG_IS_DEFAULT(UseCExt)) {
+    FLAG_SET_DEFAULT(UseCExt, true);
+  }
+  if (UseCExt) {
+    // use a compressed instruction to test if rvc is supported, or triggers a sigill
+    ResourceMark rm;
+
+    rvc_blob = BufferBlob::create("testRVC_stub", stub_size);
+    if (rvc_blob == NULL) {
+      vm_exit_during_initialization("Unable to allocate testRVC_stub");
+    }
+
+    CodeBuffer c(rvc_blob);
+    VM_Version_StubGenerator g(&c);
+    getRVCInfo_stub = CAST_TO_FN_PTR(getRVCInfo_stub_t,
+                                     g.generate_getRVCInfo(&VM_Version::_checkcext_fault_pc, &VM_Version::_checkcext_continuation_pc));
+    getRVCInfo_stub();
+  }
+
   if (!FLAG_IS_DEFAULT(UseVExt) && UseVExt) {
     // try to read vector register VLENB, if success, rvv is supported
     // otherwise, csrr will trigger sigill
     ResourceMark rm;
 
-    stub_blob = BufferBlob::create("getPsrInfo_stub", stub_size);
-    if (stub_blob == NULL) {
+    rvv_blob = BufferBlob::create("getPsrInfo_stub", stub_size);
+    if (rvv_blob == NULL) {
       vm_exit_during_initialization("Unable to allocate getPsrInfo_stub");
     }
 
-    CodeBuffer c(stub_blob);
+    CodeBuffer c(rvv_blob);
     VM_Version_StubGenerator g(&c);
     getPsrInfo_stub = CAST_TO_FN_PTR(getPsrInfo_stub_t,
                                      g.generate_getPsrInfo(&VM_Version::_checkvext_fault_pc, &VM_Version::_checkvext_continuation_pc));

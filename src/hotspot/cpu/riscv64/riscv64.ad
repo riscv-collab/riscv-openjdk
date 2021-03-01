@@ -1164,14 +1164,15 @@ bool maybe_use_tmp_register_decoding_klass() {
 
 int MachCallStaticJavaNode::ret_addr_offset()
 {
-  // call should be a simple jal
-  int off = 4;
-  return off;
+  // jal
+  return 1 * NativeInstruction::instruction_size;
 }
 
 int MachCallDynamicJavaNode::ret_addr_offset()
 {
-  return 28; // movptr, jal
+  return 4 * NativeInstruction::instruction_size +
+         2 * (!UseCExt ? NativeInstruction::instruction_size : NativeInstruction::compressed_instruction_size) +
+         1 * NativeInstruction::instruction_size; // movptr, jal
 }
 
 int MachCallRuntimeNode::ret_addr_offset() {
@@ -1191,7 +1192,14 @@ int MachCallRuntimeNode::ret_addr_offset() {
   if (cb != NULL) {
     return 1 * NativeInstruction::instruction_size;
   } else {
-    return 12 * NativeInstruction::instruction_size;
+    const int instruction_size = NativeInstruction::instruction_size;
+    const int compressed_instruction_size = (!UseCExt ? instruction_size : NativeInstruction::compressed_instruction_size);
+    return 2 * instruction_size +
+           4 * instruction_size + 2 * compressed_instruction_size +
+           1 * compressed_instruction_size +
+           1 * compressed_instruction_size +
+           1 * compressed_instruction_size +
+           1 * compressed_instruction_size;
   }
 }
 
@@ -1234,7 +1242,7 @@ uint MachBreakpointNode::size(PhaseRegAlloc *ra_) const {
   }
 
   uint MachNopNode::size(PhaseRegAlloc*) const {
-    return _count * NativeInstruction::instruction_size;
+    return _count * (!UseCExt ? NativeInstruction::instruction_size : NativeInstruction::compressed_instruction_size);
   }
 
 //=============================================================================
@@ -1303,7 +1311,7 @@ void MachPrologNode::emit(CodeBuffer &cbuf, PhaseRegAlloc *ra_) const {
 
   // insert a nop at the start of the prolog so we can patch in a
   // branch if we need to invalidate the method later
-  __ nop();
+  __ nop_nc();  // 4 bytes
 
   assert_cond(C != NULL);
 
@@ -1395,7 +1403,14 @@ void MachEpilogNode::emit(CodeBuffer &cbuf, PhaseRegAlloc *ra_) const {
   __ remove_frame(framesize);
 
   if (StackReservedPages > 0 && C->has_reserved_stack_access()) {
-    __ reserved_stack_check();
+    // C-Ext: we need to emit instructions of the same constant size here.
+    //   This Node will emit should_not_reach_here(), further emitting a movptr of pc() address.
+    //   However, C2 will do PhaseOutput::scratch_emit_size() to simulate the size of Node -
+    //   this time, the pc() is a different value from the final emission and it may get compressed.
+    //   We may get a case that Node size is different between scratch_emit and real emission phase,
+    //   which are not allowed. So we need to emit the same constant size by disabling compression
+    //   of the movptr of pc() to align with the logic.
+    __ reserved_stack_check(false);
   }
 
   if (do_polling() && C->is_method_compilation()) {
@@ -1652,7 +1667,7 @@ void BoxLockNode::emit(CodeBuffer &cbuf, PhaseRegAlloc *ra_) const {
   int reg    = ra_->get_encode(this);
 
   if (is_imm_in_range(offset, 12, 0)) {
-    __ addi(as_Register(reg), sp, offset);
+    __ addi_nc(as_Register(reg), sp, offset);
   } else if (is_imm_in_range(offset, 32, 0)) {
     __ li32(t0, offset);
     __ add(as_Register(reg), sp, t0);

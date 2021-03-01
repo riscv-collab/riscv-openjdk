@@ -44,7 +44,7 @@ void C1SafepointPollStub::emit_code(LIR_Assembler* ce)
   __ bind(_entry);
   InternalAddress safepoint_pc(__ pc() - __ offset() + safepoint_offset());
   __ code_section()->relocate(__ pc(), safepoint_pc.rspec());
-  __ la(t0, safepoint_pc.target());
+  __ la(t0, safepoint_pc.target(), false);
   __ sd(t0, Address(xthread, JavaThread::saved_exception_pc_offset()));
 
   assert(SharedRuntime::polling_page_return_handler_blob() != NULL,
@@ -108,7 +108,7 @@ void RangeCheckStub::emit_code(LIR_Assembler* ce)
   }
   int32_t off = 0;
   __ la_patchable(lr, RuntimeAddress(Runtime1::entry_for(stub_id)), off);
-  __ jalr(lr, lr, off);
+  __ jalr_nc(lr, lr, off);
   ce->add_call_info_here(_info);
   ce->verify_oop_map(_info);
   debug_only(__ should_not_reach_here());
@@ -257,7 +257,7 @@ void MonitorExitStub::emit_code(LIR_Assembler* ce)
   __ far_jump(RuntimeAddress(Runtime1::entry_for(exit_id)));
 }
 
-int PatchingStub::_patch_info_offset = -NativeGeneralJump::instruction_size;
+int PatchingStub::_patch_info_offset = -NativeGeneralJump::get_instruction_size();
 
 void PatchingStub::align_patch_site(MacroAssembler* masm) {}
 

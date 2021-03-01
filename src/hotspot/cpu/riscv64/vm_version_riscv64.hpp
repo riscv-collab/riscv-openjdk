@@ -39,17 +39,27 @@ public:
 
   constexpr static bool supports_stack_watermark_barrier() { return true; }
 
+  // UseVExt
   static bool is_checkvext_fault(address pc) {
     return pc != NULL && pc == _checkvext_fault_pc;
   }
-
   static address continuation_for_checkvext_fault(address pc) {
     assert(_checkvext_continuation_pc != NULL, "not initialized");
     return _checkvext_continuation_pc;
   }
-
   static address _checkvext_fault_pc;
   static address _checkvext_continuation_pc;
+
+  // UseCExt
+  static bool is_checkcext_fault(address pc) {
+    return pc != NULL && pc == _checkcext_fault_pc;
+  }
+  static address continuation_for_checkcext_fault(address pc) {
+    assert(_checkcext_continuation_pc != NULL, "not initialized");
+    return _checkcext_continuation_pc;
+  }
+  static address _checkcext_fault_pc;
+  static address _checkcext_continuation_pc;
 
 protected:
   static int _initial_vector_length;
