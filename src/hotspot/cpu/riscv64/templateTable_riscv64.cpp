@@ -410,7 +410,7 @@ void TemplateTable::fast_aldc(bool wide)
     __ movptr_with_offset(rarg, Universe::the_null_sentinel_addr(), offset);
     __ ld(tmp, Address(rarg, offset));
     __ resolve_oop_handle(tmp);
-    __ oop_nequal(result, tmp, notNull);
+    __ oop_bne(result, tmp, notNull);
     __ mv(result, zr);  // NULL object reference
     __ bind(notNull);
   }
@@ -1962,9 +1962,9 @@ void TemplateTable::if_acmp(Condition cc)
   __ pop_ptr(x11);
 
   if (cc == equal) {
-    __ oop_nequal(x11, x10, not_taken);
+    __ oop_bne(x11, x10, not_taken);
   } else if (cc == not_equal) {
-    __ oop_equal(x11, x10, not_taken);
+    __ oop_beq(x11, x10, not_taken);
   }
   branch(false, false);
   __ bind(not_taken);
@@ -3821,7 +3821,6 @@ void TemplateTable::monitorenter()
 
    // check for NULL object
    __ null_check(x10);
-   __ resolve(IS_NOT_NULL, x10);
 
    const Address monitor_block_top(
          fp, frame::interpreter_frame_monitor_block_top_offset * wordSize);
@@ -3917,7 +3916,6 @@ void TemplateTable::monitorexit()
 
   // check for NULL object
   __ null_check(x10);
-  __ resolve(IS_NOT_NULL, x10);
 
   const Address monitor_block_top(
         fp, frame::interpreter_frame_monitor_block_top_offset * wordSize);

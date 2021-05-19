@@ -30,6 +30,7 @@
 #include "logging/log.hpp"
 #include "memory/resourceArea.hpp"
 #include "runtime/sharedRuntime.hpp"
+#include "runtime/registerMap.hpp"
 #include "runtime/thread.hpp"
 #include "utilities/align.hpp"
 #include "utilities/debug.hpp"
