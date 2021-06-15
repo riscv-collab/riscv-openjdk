@@ -182,6 +182,7 @@ LIR_Opr FrameMap::_caller_save_fpu_regs[] = { 0, };
 // |---x23--|
 // |---x8---|
 // |---x4---|
+// |---x3---|
 // |---x2---|
 // |---x1---|
 // |---x0---|
@@ -196,7 +197,6 @@ LIR_Opr FrameMap::_caller_save_fpu_regs[] = { 0, };
 // |---..---|
 // |---x10--|
 // |---x7---|
-// |---x3---|
 
 void FrameMap::initialize() {
   assert(!_init_done, "once");

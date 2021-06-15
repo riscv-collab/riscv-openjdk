@@ -48,7 +48,7 @@ enum {
   pd_nof_caller_save_fpu_regs_frame_map = 32, // number of float registers killed by calls
 
   pd_first_callee_saved_reg = pd_nof_caller_save_cpu_regs_frame_map,
-  pd_last_callee_saved_reg = 22,
+  pd_last_callee_saved_reg = 21,
 
   pd_last_allocatable_cpu_reg = pd_nof_caller_save_cpu_regs_frame_map - 1,
 
