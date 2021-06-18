@@ -817,49 +817,49 @@ void MacroAssembler::la(Register Rd, Label &label) {
 #undef INSN
 
 
-#define INSN(NAME, FLOATCMP)                                                                                     \
-  void MacroAssembler::float_##NAME(FloatRegister Rs1, FloatRegister Rs2, Label &l, bool is_far, bool is_unordered) { \
-    if(is_unordered) {                                                                                           \
-      FLOATCMP##_s_u(t0, Rs1, Rs2);                                                                              \
-    } else {                                                                                                     \
-      FLOATCMP##_s(t0, Rs1, Rs2);                                                                                \
-    }                                                                                                            \
-    bnez(t0, l, is_far);                                                                                         \
-  }                                                                                                              \
-  void MacroAssembler::double_##NAME(FloatRegister Rs1, FloatRegister Rs2, Label &l, bool is_far, bool is_unordered) { \
-    if(is_unordered) {                                                                                           \
-      FLOATCMP##_d_u(t0, Rs1, Rs2);                                                                              \
-    } else {                                                                                                     \
-      FLOATCMP##_d(t0, Rs1, Rs2);                                                                                \
-    }                                                                                                            \
-    bnez(t0, l, is_far);                                                                                         \
+#define INSN(NAME, FLOATCMP1, FLOATCMP2)                                              \
+  void MacroAssembler::float_##NAME(FloatRegister Rs1, FloatRegister Rs2, Label &l,   \
+                                    bool is_far, bool is_unordered) {                 \
+    if(is_unordered) {                                                                \
+      /* jump if either source is NaN or condition is expected */                     \
+      FLOATCMP2##_s(t0, Rs2, Rs1);                                                    \
+      beqz(t0, l, is_far);                                                            \
+    } else {                                                                          \
+      /* jump if no NaN in source and condition is expected */                        \
+      FLOATCMP1##_s(t0, Rs1, Rs2);                                                    \
+      bnez(t0, l, is_far);                                                            \
+    }                                                                                 \
+  }                                                                                   \
+  void MacroAssembler::double_##NAME(FloatRegister Rs1, FloatRegister Rs2, Label &l,  \
+                                     bool is_far, bool is_unordered) {                \
+    if(is_unordered) {                                                                \
+      /* jump if either source is NaN or condition is expected */                     \
+      FLOATCMP2##_d(t0, Rs2, Rs1);                                                    \
+      beqz(t0, l, is_far);                                                            \
+    } else {                                                                          \
+      /* jump if no NaN in source and condition is expected */                        \
+      FLOATCMP1##_d(t0, Rs1, Rs2);                                                    \
+      bnez(t0, l, is_far);                                                            \
+    }                                                                                 \
   }
 
-  INSN(ble, fle);
-  INSN(blt, flt);
+  INSN(ble, fle, flt);
+  INSN(blt, flt, fle);
 
 #undef INSN
 
-#define INSN(NAME, FLOATCMP)                                                                                     \
-  void MacroAssembler::float_##NAME(FloatRegister Rs1, FloatRegister Rs2, Label &l, bool is_far, bool is_unordered) { \
-    if(is_unordered) {                                                                                           \
-      FLOATCMP##_s_u(t0, Rs2, Rs1);                                                                              \
-    } else {                                                                                                     \
-      FLOATCMP##_s(t0, Rs2, Rs1);                                                                                \
-    }                                                                                                            \
-    bnez(t0, l, is_far);                                                                                         \
-  }                                                                                                              \
-  void MacroAssembler::double_##NAME(FloatRegister Rs1, FloatRegister Rs2, Label &l, bool is_far, bool is_unordered) { \
-    if(is_unordered) {                                                                                           \
-      FLOATCMP##_d_u(t0, Rs2, Rs1);                                                                              \
-    } else {                                                                                                     \
-      FLOATCMP##_d(t0, Rs2, Rs1);                                                                                \
-    }                                                                                                            \
-    bnez(t0, l, is_far);                                                                                         \
+#define INSN(NAME, CMP)                                                              \
+  void MacroAssembler::float_##NAME(FloatRegister Rs1, FloatRegister Rs2, Label &l,  \
+                                    bool is_far, bool is_unordered) {                \
+    float_##CMP(Rs2, Rs1, l, is_far, is_unordered);                                  \
+  }                                                                                  \
+  void MacroAssembler::double_##NAME(FloatRegister Rs1, FloatRegister Rs2, Label &l, \
+                                     bool is_far, bool is_unordered) {               \
+    double_##CMP(Rs2, Rs1, l, is_far, is_unordered);                                 \
   }
 
-  INSN(bgt, flt);
-  INSN(bge, fle);
+  INSN(bgt, blt);
+  INSN(bge, ble);
 
 #undef INSN
 
@@ -3508,58 +3508,38 @@ FCVT_SAFE(fcvt_l_d, feq_d)
 
 #undef FCVT_SAFE
 
-// Float compare (flt_s/d fle_s/d) unordered (NaN)
-#define FCMP_UNORDERED(FLOATCMP, FLOATEQ)                                                        \
-void MacroAssembler:: FLOATCMP##_u(Register result, FloatRegister Rs1, FloatRegister Rs2) {      \
-  Label isNaN, cmpDone, fltCmp;                                                                  \
-  FLOATEQ(result, Rs1, Rs1);                                                                     \
-  beqz(result, isNaN);                                                                           \
-  FLOATEQ(result, Rs2, Rs2);                                                                     \
-  bnez(result, fltCmp);                                                                          \
-  bind(isNaN);                                                                                   \
-  addiw(result, x0, 1);                                                                          \
-  j(cmpDone);                                                                                    \
-  bind(fltCmp);                                                                                  \
-  FLOATCMP(result, Rs1, Rs2);                                                                    \
-  bind(cmpDone);                                                                                 \
-}
-
-FCMP_UNORDERED(flt_s, feq_s)
-FCMP_UNORDERED(flt_d, feq_d)
-FCMP_UNORDERED(fle_s, feq_s)
-FCMP_UNORDERED(fle_d, feq_d)
-
-#undef FCMP_UNORDERED
-
-
-#define FCMP(FLOATTYPE, FLOATCMP)                                                       \
+#define FCMP(FLOATTYPE, FLOATSIG)                                                       \
 void MacroAssembler::FLOATTYPE##_compare(Register result, FloatRegister Rs1,            \
                                          FloatRegister Rs2, int unordered_result) {     \
-  Label done;                                                                           \
+  Label Ldone;                                                                          \
   if (unordered_result < 0) {                                                           \
     /* we want -1 for unordered or less than, 0 for equal and 1 for greater than. */    \
     /* installs 1 if gt else 0 */                                                       \
-    FLOATCMP(result, Rs2, Rs1);                                                         \
-    bnez(result, done);                                                                 \
-    /* keeps 0 if eq else installs 1 */                                                 \
-    FLOATCMP##_u(result, Rs1, Rs2);                                                     \
-    /* result = -1 if lt or unordered; else if eq, result = 0; */                       \
-    neg(result, result);                                                                \
+    flt_##FLOATSIG(result, Rs2, Rs1);                                                   \
+    /* Rs1 > Rs2, install 1 */                                                          \
+    bgtz(result, Ldone);                                                                \
+    feq_##FLOATSIG(result, Rs1, Rs2);                                                   \
+    addi(result, result, -1);                                                           \
+    /* Rs1 = Rs2, install 0 */                                                          \
+    /* NaN or Rs1 < Rs2, install -1 */                                                  \
+    bind(Ldone);                                                                        \
   } else {                                                                              \
     /* we want -1 for less than, 0 for equal and 1 for unordered or greater than. */    \
     /* installs 1 if gt or unordered else 0 */                                          \
-    FLOATCMP##_u(result, Rs2, Rs1);                                                     \
-    bnez(result, done);                                                                 \
-    /* keeps 0 if eq else installs 1 */                                                 \
-    FLOATCMP(result, Rs1, Rs2);                                                         \
-    /* result = -1 if lt; else if eq, result = 0 */                                     \
+    flt_##FLOATSIG(result, Rs1, Rs2);                                                   \
+    /* Rs1 < Rs2, install -1 */                                                         \
+    bgtz(result, Ldone);                                                                \
+    feq_##FLOATSIG(result, Rs1, Rs2);                                                   \
+    addi(result, result, -1);                                                           \
+    /* Rs1 = Rs2, install 0 */                                                          \
+    /* NaN or Rs1 > Rs2, install 1 */                                                   \
+    bind(Ldone);                                                                        \
     neg(result, result);                                                                \
   }                                                                                     \
-  bind(done);                                                                           \
 }
 
-FCMP(float, flt_s);
-FCMP(double, flt_d);
+FCMP(float, s);
+FCMP(double, d);
 
 #undef FCMP
 

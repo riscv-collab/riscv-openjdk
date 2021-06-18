@@ -8329,11 +8329,11 @@ instruct cmpF3_reg_reg(iRegINoSp dst, fRegF op1, fRegF op2)
 %{
   match(Set dst (CmpF3 op1 op2));
 
-  ins_cost(XFER_COST + BRANCH_COST + ALU_COST * 2);
-  format %{ "flt.s   $dst, $op2, $op1\t#@cmpF3_reg_reg\n\t"
-            "bnez  $dst, done\n\t"
-            "flt.s  $dst, $op1, $op2\n\t"
-            "neg   $dst, $dst\t#@cmpF3_reg_reg"
+  ins_cost(XFER_COST * 2 + BRANCH_COST + ALU_COST);
+  format %{ "flt.s  $dst, $op2, $op1\t#@cmpF3_reg_reg\n\t"
+            "bgtz   $dst, done\n\t"
+            "feq.s  $dst, $op1, $op2\n\t"
+            "addi   $dst, $dst, -1\t#@cmpF3_reg_reg"
   %}
 
   ins_encode %{
@@ -8349,11 +8349,11 @@ instruct cmpD3_reg_reg(iRegINoSp dst, fRegD op1, fRegD op2)
 %{
   match(Set dst (CmpD3 op1 op2));
 
-  ins_cost(XFER_COST + BRANCH_COST + ALU_COST * 2);
-  format %{ "flt.d   $dst, $op2, $op1\t#@cmpD3_reg_reg\n\t"
-            "bnez  $dst, done\n\t"
-            "flt.d  $dst, $op1, $op2\n\t"
-            "neg   $dst, $dst\t#@cmpD3_reg_reg"
+  ins_cost(XFER_COST * 2 + BRANCH_COST + ALU_COST);
+  format %{ "flt.d  $dst, $op2, $op1\t#@cmpD3_reg_reg\n\t"
+            "bgtz   $dst, done\n\t"
+            "feq.d  $dst, $op1, $op2\n\t"
+            "addi   $dst, $dst, -1\t#@cmpD3_reg_reg"
   %}
 
   ins_encode %{

@@ -704,12 +704,6 @@ class MacroAssembler: public Assembler {
   void fcvt_w_d_safe(Register dst, FloatRegister src, Register temp = t0);
   void fcvt_l_d_safe(Register dst, FloatRegister src, Register temp = t0);
 
-  // flt_s/d fle_s/d unordered (NaN)
-  void flt_s_u(Register result, FloatRegister Rs1, FloatRegister Rs2);
-  void flt_d_u(Register result, FloatRegister Rs1, FloatRegister Rs2);
-  void fle_s_u(Register result, FloatRegister Rs1, FloatRegister Rs2);
-  void fle_d_u(Register result, FloatRegister Rs1, FloatRegister Rs2);
-
   // vector load/store unit-stride instructions
   void vlex_v(VectorRegister vd, Register base, Assembler::SEW sew, VectorMask vm = unmasked) {
     switch (sew) {
