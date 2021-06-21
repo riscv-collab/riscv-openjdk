@@ -328,9 +328,9 @@ void C1_MacroAssembler::inline_cache_check(Register receiver, Register iCache, L
 void C1_MacroAssembler::build_frame(int framesize, int bang_size_in_bytes) {
   assert(bang_size_in_bytes >= framesize, "stack bang size incorrect");
   // Make sure there is enough stack space for this method's activation.
-  // Note that we do this before doing an enter().
+  // Note that we do this before creating a frame.
   generate_stack_overflow_check(bang_size_in_bytes);
-  MacroAssembler::build_frame(framesize + 2 * wordSize); // 2: multiplier for wordSize
+  MacroAssembler::build_frame(framesize);
 
   // Insert nmethod entry barrier into frame.
   BarrierSetAssembler* bs = BarrierSet::barrier_set()->barrier_set_assembler();
@@ -338,7 +338,7 @@ void C1_MacroAssembler::build_frame(int framesize, int bang_size_in_bytes) {
 }
 
 void C1_MacroAssembler::remove_frame(int framesize) {
-  MacroAssembler::remove_frame(framesize + 2 * wordSize); // 2: multiplier for wordSize
+  MacroAssembler::remove_frame(framesize);
 }
 
 
@@ -436,9 +436,9 @@ void C1_MacroAssembler::c1_cmp_branch(int cmpFlag, Register op1, Register op2, L
   if (type == T_OBJECT || type == T_ARRAY) {
     assert(cmpFlag == lir_cond_equal || cmpFlag == lir_cond_notEqual, "Should be equal or notEqual");
     if (cmpFlag == lir_cond_equal) {
-      oop_equal(op1, op2, label, is_far);
+      oop_beq(op1, op2, label, is_far);
     } else {
-      oop_nequal(op1, op2, label, is_far);
+      oop_bne(op1, op2, label, is_far);
     }
   } else {
     assert(cmpFlag >= 0 && cmpFlag < (int)(sizeof(c1_cond_branch) / sizeof(c1_cond_branch[0])),

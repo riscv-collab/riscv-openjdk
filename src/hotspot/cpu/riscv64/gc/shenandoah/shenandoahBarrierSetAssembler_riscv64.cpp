@@ -245,8 +245,17 @@ void ShenandoahBarrierSetAssembler::load_reference_barrier(MacroAssembler* masm,
   __ lbu(t1, gc_state);
 
   // Check for heap stability
-  __ andi(t1, t1, ShenandoahHeap::HAS_FORWARDED);
-  __ beqz(t1, heap_stable);
+  if (is_strong) {
+    __ andi(t1, t1, ShenandoahHeap::HAS_FORWARDED);
+    __ beqz(t1, heap_stable);
+  } else {
+    Label lrb;
+    __ andi(t0, t1, ShenandoahHeap::WEAK_ROOTS);
+    __ bnez(t0, lrb);
+    __ andi(t0, t1, ShenandoahHeap::HAS_FORWARDED);
+    __ beqz(t0, heap_stable);
+    __ bind(lrb);
+  }
 
   // use x11 for load address
   Register result_dst = dst;
@@ -287,7 +296,7 @@ void ShenandoahBarrierSetAssembler::load_reference_barrier(MacroAssembler* masm,
   } else {
     assert(is_phantom, "only remaining strength");
     assert(!is_narrow, "phantom access cannot be narrow");
-    __ li(lr, (int64_t)(uintptr_t)ShenandoahRuntime::load_reference_barrier_weak);
+    __ li(lr, (int64_t)(uintptr_t)ShenandoahRuntime::load_reference_barrier_phantom);
   }
   __ jalr(lr);
   __ mv(t0, x10);

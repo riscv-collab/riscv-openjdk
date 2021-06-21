@@ -523,7 +523,7 @@ void InterpreterMacroAssembler::dispatch_base(TosState state,
 
   if (needs_thread_local_poll) {
     NOT_PRODUCT(block_comment("Thread-local Safepoint poll"));
-    ld(t1, Address(xthread, Thread::polling_word_offset()));
+    ld(t1, Address(xthread, JavaThread::polling_word_offset()));
     andi(t1, t1, SafepointMechanism::poll_bit());
     bnez(t1, safepoint);
   }

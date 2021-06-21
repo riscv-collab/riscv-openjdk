@@ -156,7 +156,7 @@ void MethodHandles::jump_to_lambda_form(MacroAssembler* _masm,
                         sizeof(u2), /*is_signed*/ false);
     Label L;
     __ ld(t0, __ argument_address(temp2, -1));
-    __ oop_equal(recv, t0, L);
+    __ oop_beq(recv, t0, L);
     __ ld(x10, __ argument_address(temp2, -1));
     __ ebreak();
     __ BIND(L);

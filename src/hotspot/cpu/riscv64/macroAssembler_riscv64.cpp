@@ -32,6 +32,7 @@
 #include "gc/shared/barrierSetAssembler.hpp"
 #include "gc/shared/cardTable.hpp"
 #include "gc/shared/cardTableBarrierSet.hpp"
+#include "interpreter/bytecodeHistogram.hpp"
 #include "interpreter/interpreter.hpp"
 #include "memory/resourceArea.hpp"
 #include "memory/universe.hpp"
@@ -1369,7 +1370,7 @@ int MacroAssembler::patch_oop(address insn_addr, address o) {
   // instruction.
   if (NativeInstruction::is_li32_at(insn_addr)) {
     // Move narrow OOP
-    narrowOop n = CompressedOops::encode((oop)o);
+    narrowOop n = CompressedOops::encode(cast_to_oop(o));
     return patch_imm_in_li32(insn_addr, (int32_t)n);
   } else if (NativeInstruction::is_movptr_at(insn_addr)) {
     // Move wide OOP
@@ -1985,16 +1986,6 @@ void MacroAssembler::store_heap_oop(Address dst, Register src, Register tmp1,
   access_store_at(T_OBJECT, IN_HEAP | decorators, dst, src, tmp1, thread_tmp);
 }
 
-void MacroAssembler::resolve(DecoratorSet decorators, Register obj) {
-  // Use stronger ACCESS_READ | ACCESS_WRITE by default.
-  if ((decorators & (ACCESS_READ | ACCESS_WRITE)) == 0) {
-    decorators |= ACCESS_READ | ACCESS_WRITE;
-  }
-
-  BarrierSetAssembler* bs = BarrierSet::barrier_set()->barrier_set_assembler();
-  return bs->resolve(this, decorators, obj);
-}
-
 void MacroAssembler::load_heap_oop(Register dst, Address src, Register tmp1,
                                    Register thread_tmp, DecoratorSet decorators) {
   access_load_at(T_OBJECT, IN_HEAP | decorators, dst, src, tmp1, thread_tmp);
@@ -2193,7 +2184,7 @@ void MacroAssembler::check_klass_subtype(Register sub_klass,
 }
 
 void MacroAssembler::safepoint_poll(Label& slow_path, bool at_return, bool acquire, bool in_nmethod) {
-  ld(t0, Address(xthread, Thread::polling_word_offset()));
+  ld(t0, Address(xthread, JavaThread::polling_word_offset()));
   if (acquire) {
     membar(MacroAssembler::LoadLoad | MacroAssembler::LoadStore);
   }
@@ -2992,7 +2983,8 @@ void MacroAssembler::la_patchable(Register reg1, const Address &dest, int32_t &o
 }
 
 void MacroAssembler::build_frame(int framesize) {
-  assert(framesize > 0, "framesize must be > 0");
+  assert(framesize >= 2 * wordSize, "framesize must include space for FP/LR");
+  assert(framesize % (2 * wordSize) == 0, "must preserve 2 * wordSize alignment");
   sub(sp, sp, framesize);
   sd(fp, Address(sp, framesize - 2 * wordSize));
   sd(lr, Address(sp, framesize - wordSize));
@@ -3001,7 +2993,8 @@ void MacroAssembler::build_frame(int framesize) {
 }
 
 void MacroAssembler::remove_frame(int framesize) {
-  assert(framesize > 0, "framesize must be > 0");
+  assert(framesize >= 2 * wordSize, "framesize must include space for FP/LR");
+  assert(framesize % (2 * wordSize) == 0, "must preserve 2 * wordSize alignment");
   ld(fp, Address(sp, framesize - 2 * wordSize));
   ld(lr, Address(sp, framesize - wordSize));
   add(sp, sp, framesize);
@@ -3034,7 +3027,7 @@ void MacroAssembler::reserved_stack_check() {
 
 // Move the address of the polling page into dest.
 void MacroAssembler::get_polling_page(Register dest, relocInfo::relocType rtype) {
-  ld(dest, Address(xthread, Thread::polling_page_offset()));
+  ld(dest, Address(xthread, JavaThread::polling_page_offset()));
 }
 
 // Read the polling page.  The address of the polling page must
@@ -3228,14 +3221,12 @@ void MacroAssembler::load_method_holder(Register holder, Register method) {
   ld(holder, Address(holder, ConstantPool::pool_holder_offset_in_bytes())); // InstanceKlass*
 }
 
-void MacroAssembler::oop_equal(Register obj1, Register obj2, Label& equal, bool is_far) {
-  BarrierSetAssembler* bs = BarrierSet::barrier_set()->barrier_set_assembler();
-  bs->obj_equals(this, obj1, obj2, equal, is_far);
+void MacroAssembler::oop_beq(Register obj1, Register obj2, Label& L_equal, bool is_far) {
+  beq(obj1, obj2, L_equal, is_far);
 }
 
-void MacroAssembler::oop_nequal(Register obj1, Register obj2, Label& nequal, bool is_far) {
-  BarrierSetAssembler* bs = BarrierSet::barrier_set()->barrier_set_assembler();
-  bs->obj_nequals(this, obj1, obj2, nequal, is_far);
+void MacroAssembler::oop_bne(Register obj1, Register obj2, Label& L_nequal, bool is_far) {
+  bne(obj1, obj2, L_nequal, is_far);
 }
 
 // string indexof

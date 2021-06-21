@@ -207,7 +207,6 @@ class MacroAssembler: public Assembler {
   void decode_heap_oop(Register r) { decode_heap_oop(r, r); }
   void encode_heap_oop(Register d, Register s);
   void encode_heap_oop(Register r) { encode_heap_oop(r, r); };
-  void resolve(DecoratorSet decorators, Register obj);
   void load_heap_oop(Register dst, Address src, Register tmp1 = noreg,
                      Register thread_tmp = noreg, DecoratorSet decorators = 0);
   void load_heap_oop_not_null(Register dst, Address src, Register tmp1 = noreg,
@@ -676,8 +675,8 @@ class MacroAssembler: public Assembler {
   void load_method_holder_cld(Register result, Register method);
   void load_method_holder(Register holder, Register method);
 
-  void oop_equal(Register obj1, Register obj2, Label& equal, bool is_far = false); // cmpoop
-  void oop_nequal(Register obj1, Register obj2, Label& nequal, bool is_far = false);
+  void oop_beq(Register obj1, Register obj2, Label& L_equal, bool is_far = false);
+  void oop_bne(Register obj1, Register obj2, Label& L_nequal, bool is_far = false);
 
   void compute_index(Register str1, Register tailing_zero, Register match_mask,
                      Register result, Register char_tmp, Register tmp,
