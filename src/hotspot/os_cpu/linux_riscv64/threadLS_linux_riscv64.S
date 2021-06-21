@@ -29,15 +29,9 @@
     .type   _ZN10JavaThread25riscv64_get_thread_helperEv, %function
 
 _ZN10JavaThread25riscv64_get_thread_helperEv:
-    addi    sp, sp, -16
-    sd      ra, 8(sp)
-    sd      s0, 0(sp)
     la.tls.ie a0, _ZN6Thread12_thr_currentE
     add     a0, a0, tp
     ld      a0, 0(a0)
-    ld      ra, 8(sp)
-    ld      s0, 0(sp)
-    addi    sp, sp, 16
     ret
 
     .size _ZN10JavaThread25riscv64_get_thread_helperEv, .-_ZN10JavaThread25riscv64_get_thread_helperEv
