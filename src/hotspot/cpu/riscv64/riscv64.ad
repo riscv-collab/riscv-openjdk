@@ -1968,42 +1968,7 @@ bool Matcher::pd_clone_node(Node* n, Node* m, Matcher::MStack& mstack) {
 // to be subsumed into complex addressing expressions or compute them
 // into registers?
 bool Matcher::pd_clone_address_expressions(AddPNode* m, Matcher::MStack& mstack, VectorSet& address_visited) {
-  assert_cond(m != NULL);
-  if (clone_base_plus_offset_address(m, mstack, address_visited)) {
-    return true;
-  }
-
-  Node *off = m->in(AddPNode::Offset);
-  if (off != NULL && off->Opcode() == Op_LShiftL && off->in(2)->is_Con() &&
-      size_fits_all_mem_uses(m, off->in(2)->get_int()) &&
-      // Are there other uses besides address expressions?
-      !is_visited(off)) {
-    address_visited.set(off->_idx); // Flag as address_visited
-    mstack.push(off->in(2), Visit);
-    Node *conv = off->in(1);
-    if (conv->Opcode() == Op_ConvI2L &&
-        // Are there other uses besides address expressions?
-        !is_visited(conv)) {
-      address_visited.set(conv->_idx); // Flag as address_visited
-      mstack.push(conv->in(1), Pre_Visit);
-    } else {
-      mstack.push(conv, Pre_Visit);
-    }
-    address_visited.test_set(m->_idx); // Flag as address_visited
-    mstack.push(m->in(AddPNode::Address), Pre_Visit);
-    mstack.push(m->in(AddPNode::Base), Pre_Visit);
-    return true;
-  } else if (off != NULL && off->Opcode() == Op_ConvI2L &&
-             // Are there other uses besides address expressions?
-             !is_visited(off)) {
-    address_visited.test_set(m->_idx); // Flag as address_visited
-    address_visited.set(off->_idx); // Flag as address_visited
-    mstack.push(off->in(1), Pre_Visit);
-    mstack.push(m->in(AddPNode::Address), Pre_Visit);
-    mstack.push(m->in(AddPNode::Base), Pre_Visit);
-    return true;
-  }
-  return false;
+  return clone_base_plus_offset_address(m, mstack, address_visited);
 }
 
 %}
