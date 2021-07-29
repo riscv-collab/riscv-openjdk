@@ -517,6 +517,12 @@ class MacroAssembler: public Assembler {
   // if heap base register is used - reinit it with the correct value
   void reinit_heapbase();
 
+  void bind(Label& L) {
+    Assembler::bind(L);
+    // fences across basic blocks should not be merged
+    code()->clear_last_insn();
+  }
+
   // mv
   void mv(Register Rd, int64_t imm64);
   void mv(Register Rd, int imm);
