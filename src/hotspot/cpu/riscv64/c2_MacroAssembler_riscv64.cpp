@@ -772,12 +772,12 @@ void C2_MacroAssembler::string_indexof_linearscan(Register haystack, Register ne
 
 // Compare strings.
 void C2_MacroAssembler::string_compare(Register str1, Register str2,
-                                    Register cnt1, Register cnt2, Register result, Register tmp1, Register tmp2,
-                                    Register tmp3, int ae)
+                                       Register cnt1, Register cnt2, Register result, Register tmp1, Register tmp2,
+                                       Register tmp3, int ae)
 {
   Label DONE, SHORT_LOOP, SHORT_STRING, SHORT_LAST, TAIL, STUB,
-      DIFFERENCE, NEXT_WORD, SHORT_LOOP_TAIL, SHORT_LAST2, SHORT_LAST_INIT,
-      SHORT_LOOP_START, TAIL_CHECK, L;
+        DIFFERENCE, NEXT_WORD, SHORT_LOOP_TAIL, SHORT_LAST2, SHORT_LAST_INIT,
+        SHORT_LOOP_START, TAIL_CHECK, L;
 
   const int STUB_THRESHOLD = 64 + 8;
   bool isLL = ae == StrIntrinsicNode::LL;
@@ -821,9 +821,10 @@ void C2_MacroAssembler::string_compare(Register str1, Register str2,
   // load first parts of strings and finish initialization while loading
   {
     if (str1_isL == str2_isL) { // LL or UU
+      // check if str1 and str2 are same string
+      beq(str1, str2, DONE);
       // load 8 bytes once to compare
       ld(tmp1, Address(str1));
-      beq(str1, str2, DONE);
       ld(tmp2, Address(str2));
       li(t0, STUB_THRESHOLD);
       bge(cnt2, t0, STUB);
@@ -867,8 +868,7 @@ void C2_MacroAssembler::string_compare(Register str1, Register str2,
     }
     addi(cnt2, cnt2, isUL ? 4 : 8);
     bgez(cnt2, TAIL);
-    xorr(tmp3, tmp1, tmp2);
-    bnez(tmp3, DIFFERENCE);
+    bne(tmp1, tmp2, DIFFERENCE);
 
     // main loop
     bind(NEXT_WORD);
@@ -899,36 +899,67 @@ void C2_MacroAssembler::string_compare(Register str1, Register str2,
     }
     bgez(cnt2, TAIL);
 
-    xorr(tmp3, tmp1, tmp2);
-    beqz(tmp3, NEXT_WORD);
+    beq(tmp1, tmp2, NEXT_WORD);
     j(DIFFERENCE);
     bind(TAIL);
-    xorr(tmp3, tmp1, tmp2);
-    bnez(tmp3, DIFFERENCE);
-    // Last longword.  In the case where length == 4 we compare the
-    // same longword twice, but that's still faster than another
-    // conditional branch.
-    if (str1_isL == str2_isL) { // LL or UU
-      ld(tmp1, Address(str1));
-      ld(tmp2, Address(str2));
-    } else if (isLU) { // LU case
-      lwu(tmp1, Address(str1));
-      ld(tmp2, Address(str2));
-      inflate_lo32(tmp3, tmp1);
-      mv(tmp1, tmp3);
-    } else { // UL case
-      lwu(tmp2, Address(str2));
-      ld(tmp1, Address(str1));
-      inflate_lo32(tmp3, tmp2);
-      mv(tmp2, tmp3);
+    bne(tmp1, tmp2, DIFFERENCE);
+    // Last longword.
+    if (AvoidUnalignedAccesses) {
+      // Aligned access. Load bytes from byte-aligned address,
+      // which may contain invalid bytes when remaining bytes are
+      // less than 4(UL/LU) or 8 (LL/UU).
+      // Invalid bytes should be removed before comparison.
+      if (str1_isL == str2_isL) { // LL or UU
+        add(t0, str1, cnt2);
+        ld(tmp1, Address(t0));
+        add(t0, str2, cnt2);
+        ld(tmp2, Address(t0));
+      } else if (isLU) { // LU
+        add(t0, str1, cnt1);
+        lwu(tmp1, Address(t0));
+        add(t0, str2, cnt2);
+        ld(tmp2, Address(t0));
+        inflate_lo32(tmp3, tmp1);
+        mv(tmp1, tmp3);
+      } else {  // UL
+        add(t0, str1, cnt1);
+        ld(tmp1, Address(t0));
+        add(t0, str2, cnt2);
+        lwu(tmp2, Address(t0));
+        inflate_lo32(tmp3, tmp2);
+        mv(tmp2, tmp3);
+        slli(cnt2, cnt2, 1);  // UL case should convert cnt2 into bytes
+      }
+      // remove invalid bytes
+      slli(t0, cnt2, LogBitsPerByte);
+      sll(tmp1, tmp1, t0);
+      sll(tmp2, tmp2, t0);
+    } else {
+      // Last longword.  In the case where length == 4 we compare the
+      // same longword twice, but that's still faster than another
+      // conditional branch.
+      if (str1_isL == str2_isL) { // LL or UU
+        ld(tmp1, Address(str1));
+        ld(tmp2, Address(str2));
+      } else if (isLU) { // LU case
+        lwu(tmp1, Address(str1));
+        ld(tmp2, Address(str2));
+        inflate_lo32(tmp3, tmp1);
+        mv(tmp1, tmp3);
+      } else { // UL case
+        ld(tmp1, Address(str1));
+        lwu(tmp2, Address(str2));
+        inflate_lo32(tmp3, tmp2);
+        mv(tmp2, tmp3);
+      }
     }
     bind(TAIL_CHECK);
-    xorr(tmp3, tmp1, tmp2);
-    beqz(tmp3, DONE);
+    beq(tmp1, tmp2, DONE);
 
     // Find the first different characters in the longwords and
     // compute their difference.
     bind(DIFFERENCE);
+    xorr(tmp3, tmp1, tmp2);
     ctzc_bit(result, tmp3, isLL); // count zero from lsb to msb
     srl(tmp1, tmp1, result);
     srl(tmp2, tmp2, result);

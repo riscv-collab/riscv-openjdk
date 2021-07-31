@@ -3296,19 +3296,17 @@ void MacroAssembler::ctzc_bit(Register Rd, Register Rs, bool isLL, Register Rtmp
 void MacroAssembler::inflate_lo32(Register Rd, Register Rs, Register Rtmp1, Register Rtmp2)
 {
   assert_different_registers(Rd, Rs, Rtmp1, Rtmp2);
-  li(Rtmp1, 0xFF);
-  mv(Rd, zr);
-  for (int i = 0; i <= 3; i++)
-  {
+  li(Rtmp1, 0xFF000000);  // first byte mask at lower word
+  andr(Rd, Rs, Rtmp1);
+  for (int i = 0; i < 2; i++) {
+    slli(Rd, Rd, wordSize);
+    srli(Rtmp1, Rtmp1, wordSize);
     andr(Rtmp2, Rs, Rtmp1);
-    if (i) {
-      slli(Rtmp2, Rtmp2, i * 8);
-    }
     orr(Rd, Rd, Rtmp2);
-    if (i != 3) {
-      slli(Rtmp1, Rtmp1, 8);
-    }
   }
+  slli(Rd, Rd, wordSize);
+  andi(Rtmp2, Rs, 0xFF);  // last byte mask at lower word
+  orr(Rd, Rd, Rtmp2);
 }
 
 // This instruction reads adjacent 4 bytes from the upper half of source register,
@@ -3318,17 +3316,8 @@ void MacroAssembler::inflate_lo32(Register Rd, Register Rs, Register Rtmp1, Regi
 void MacroAssembler::inflate_hi32(Register Rd, Register Rs, Register Rtmp1, Register Rtmp2)
 {
   assert_different_registers(Rd, Rs, Rtmp1, Rtmp2);
-  li(Rtmp1, 0xFF00000000);
-  mv(Rd, zr);
-  for (int i = 0; i <= 3; i++)
-  {
-    andr(Rtmp2, Rs, Rtmp1);
-    orr(Rd, Rd, Rtmp2);
-    srli(Rd, Rd, 8);
-    if (i != 3) {
-      slli(Rtmp1, Rtmp1, 8);
-    }
-  }
+  srli(Rs, Rs, 32);   // only upper 32 bits are needed
+  inflate_lo32(Rd, Rs, Rtmp1, Rtmp2);
 }
 
 // The size of the blocks erased by the zero_blocks stub.  We must

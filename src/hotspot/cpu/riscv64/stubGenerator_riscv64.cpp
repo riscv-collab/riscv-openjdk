@@ -2256,42 +2256,42 @@ class StubGenerator: public StubCodeGenerator {
   }
 
   // code for comparing 16 bytes of strings with same encoding
-  void compare_string_16_bytes_same(Label &DIFF1, Label &DIFF2) {
+  void compare_string_16_bytes_same(Label& DIFF1, Label& DIFF2) {
     const Register result = x10, str1 = x11, cnt1 = x12, str2 = x13, tmp1 = x28, tmp2 = x29, tmp4 = x7, tmp5 = x31;
     __ ld(tmp5, Address(str1));
-    __ addi(str1, str1, 8);
+    __ addi(str1, str1, wordSize);
     __ xorr(tmp4, tmp1, tmp2);
     __ ld(cnt1, Address(str2));
-    __ addi(str2, str2, 8);
+    __ addi(str2, str2, wordSize);
     __ bnez(tmp4, DIFF1);
     __ ld(tmp1, Address(str1));
-    __ addi(str1, str1, 8);
+    __ addi(str1, str1, wordSize);
     __ xorr(tmp4, tmp5, cnt1);
     __ ld(tmp2, Address(str2));
-    __ addi(str2, str2, 8);
+    __ addi(str2, str2, wordSize);
     __ bnez(tmp4, DIFF2);
   }
 
   // code for comparing 8 characters of strings with Latin1 and Utf16 encoding
-  void compare_string_8_x_LU(Register tmpL, Register tmpU, Label &DIFF1,
-                              Label &DIFF2) {
-    const Register strU = x12, curU = x7, strL = x29, tmp = x30;
+  void compare_string_8_x_LU(Register tmpL, Register tmpU, Register strL, Register strU, Label& DIFF) {
+    const Register tmp = x30;
     __ ld(tmpL, Address(strL));
-    __ addi(strL, strL, 8);
+    __ addi(strL, strL, wordSize);
     __ ld(tmpU, Address(strU));
-    __ addi(strU, strU, 8);
+    __ addi(strU, strU, wordSize);
     __ inflate_lo32(tmp, tmpL);
     __ mv(t0, tmp);
-    __ xorr(tmp, curU, t0);
-    __ bnez(tmp, DIFF2);
+    __ xorr(tmp, tmpU, t0);
+    __ bnez(tmp, DIFF);
 
-    __ ld(curU, Address(strU));
-    __ addi(strU, strU, 8);
+    __ ld(tmpU, Address(strU));
+    __ addi(strU, strU, wordSize);
     __ inflate_hi32(tmp, tmpL);
     __ mv(t0, tmp);
     __ xorr(tmp, tmpU, t0);
-    __ bnez(tmp, DIFF1);
+    __ bnez(tmp, DIFF);
   }
+
 
   // x10  = result
   // x11  = str1
@@ -2305,8 +2305,7 @@ class StubGenerator: public StubCodeGenerator {
     __ align(CodeEntryAlignment);
     StubCodeMark mark(this, "StubRoutines", isLU ? "compare_long_string_different_encoding LU" : "compare_long_string_different_encoding UL");
     address entry = __ pc();
-    Label SMALL_LOOP, TAIL, TAIL_LOAD_16, LOAD_LAST, DIFF1, DIFF2,
-          DONE, CALCULATE_DIFFERENCE;
+    Label SMALL_LOOP, TAIL, LOAD_LAST, DIFF, DONE, CALCULATE_DIFFERENCE;
     const Register result = x10, str1 = x11, cnt1 = x12, str2 = x13, cnt2 = x14,
                    tmp1 = x28, tmp2 = x29, tmp3 = x30, tmp4 = x7, tmp5 = x31;
     RegSet spilled_regs = RegSet::of(tmp4, tmp5);
@@ -2317,18 +2316,9 @@ class StubGenerator: public StubCodeGenerator {
     __ mv(isLU ? tmp1 : tmp2, tmp3);
     __ addi(str1, str1, isLU ? wordSize / 2 : wordSize);
     __ addi(str2, str2, isLU ? wordSize : wordSize / 2);
-    __ sub(cnt2, cnt2, 8); // Already loaded 4 symbols. Last 4 is special case.
+    __ sub(cnt2, cnt2, wordSize / 2); // Already loaded 4 symbols.
     __ push_reg(spilled_regs, sp);
 
-    if (isLU) {
-      __ add(str1, str1, cnt2);
-      __ slli(t0, cnt2, 1);
-      __ add(str2, str2, t0);
-    } else {
-      __ slli(t0, cnt2, 1);
-      __ add(str1, str1, t0);
-      __ add(str2, str2, cnt2);
-    }
     __ xorr(tmp3, tmp1, tmp2);
     __ mv(tmp5, tmp2);
     __ bnez(tmp3, CALCULATE_DIFFERENCE);
@@ -2338,46 +2328,72 @@ class StubGenerator: public StubCodeGenerator {
              tmpU = isLU ? tmp5 : tmp1, // where to keep U for comparison
              tmpL = isLU ? tmp1 : tmp5; // where to keep L for comparison
 
-    __ sub(tmp2, strL, cnt2); // strL pointer to load from
-    __ slli(t0, cnt2, 1);
-    __ sub(cnt1, strU, t0); // strU pointer to load from
+    // make sure main loop is byte-aligned, we should load another 4 bytes from strL
+    __ beqz(cnt2, DONE);  // no characters left
+    __ lwu(tmpL, Address(strL));
+    __ addi(strL, strL, wordSize / 2);
+    __ ld(tmpU, Address(strU));
+    __ addi(strU, strU, wordSize);
+    __ inflate_lo32(tmp3, tmpL);
+    __ mv(tmpL, tmp3);
+    __ xorr(tmp3, tmpU, tmpL);
+    __ bnez(tmp3, CALCULATE_DIFFERENCE);
+    __ addi(cnt2, cnt2, -wordSize / 2);
 
-    __ ld(tmp4, Address(cnt1));
-    __ addi(cnt1, cnt1, 8);
-    __ beqz(cnt2, LOAD_LAST); // no characters left except last load
-    __ sub(cnt2, cnt2, 16);
+    __ beqz(cnt2, DONE);  // no character left
+    __ sub(cnt2, cnt2, wordSize * 2);
     __ bltz(cnt2, TAIL);
     __ bind(SMALL_LOOP); // smaller loop
-      __ sub(cnt2, cnt2, 16);
-      compare_string_8_x_LU(tmpL, tmpU, DIFF1, DIFF2);
-      compare_string_8_x_LU(tmpL, tmpU, DIFF1, DIFF2);
+      __ sub(cnt2, cnt2, wordSize * 2);
+      compare_string_8_x_LU(tmpL, tmpU, strL, strU, DIFF);
+      compare_string_8_x_LU(tmpL, tmpU, strL, strU, DIFF);
       __ bgez(cnt2, SMALL_LOOP);
-      __ addi(t0, cnt2, 16);
-      __ beqz(t0, LOAD_LAST);
-    __ bind(TAIL); // 1..15 characters left until last load (last 4 characters)
-      __ slli(t0, cnt2, 1);
-      __ add(cnt1, cnt1, t0); // Address of 8 bytes before last 4 characters in UTF-16 string
-      __ add(tmp2, tmp2, cnt2); // Address of 16 bytes before last 4 characters in Latin1 string
-      __ ld(tmp4, Address(cnt1, -8));
-      // last 16 characters before last load
-      compare_string_8_x_LU(tmpL, tmpU, DIFF1, DIFF2);
-      compare_string_8_x_LU(tmpL, tmpU, DIFF1, DIFF2);
-      __ j(LOAD_LAST);
-    __ bind(DIFF2);
-      __ mv(tmpU, tmp4);
-    __ bind(DIFF1);
+      __ addi(t0, cnt2, wordSize * 2);
+      __ beqz(t0, DONE);
+    __ bind(TAIL);  // 1..15 characters left
+      if (AvoidUnalignedAccesses) {
+        // Aligned access. Load bytes from byte-aligned address,
+        // which may contain invalid bytes in last load.
+        // Invalid bytes should be removed before comparison.
+        Label LOAD_LAST, WORD_CMP;
+        __ addi(t0, cnt2, wordSize);
+        __ bgtz(t0, LOAD_LAST);
+        // remaining characters are greater than or equals to 8, we can do one compare_string_8_x_LU
+        compare_string_8_x_LU(tmpL, tmpU, strL, strU, DIFF);
+        __ addi(cnt2, cnt2, wordSize);
+        __ beqz(cnt2, DONE);  // no character left
+        __ bind(LOAD_LAST);   // 1..7 characters left
+        __ lwu(tmpL, Address(strL));
+        __ addi(strL, strL, wordSize / 2);
+        __ ld(tmpU, Address(strU));
+        __ addi(strU, strU, wordSize);
+        __ inflate_lo32(tmp3, tmpL);
+        __ mv(tmpL, tmp3);
+        __ addi(t0, cnt2, wordSize / 2);
+        __ blez(t0, WORD_CMP);
+        __ slli(t0, t0, 1); // now in bytes
+        __ slli(t0, t0, LogBitsPerByte);
+        __ sll(tmpL, tmpL, t0);
+        __ sll(tmpU, tmpU, t0);
+        // remaining characters are greater than or equals to 4, we can do one full 4-byte comparison
+        __ bind(WORD_CMP);
+        __ xorr(tmp3, tmpU, tmpL);
+        __ bnez(tmp3, CALCULATE_DIFFERENCE);
+        __ addi(cnt2, cnt2, wordSize / 2);
+        __ bltz(cnt2, LOAD_LAST); // 1..3 characters left
+        __ j(DONE); // no character left
+      } else {
+        // Unaligned accesses. Load from non-byte aligned address.
+        __ slli(t0, cnt2, 1);     // now in bytes
+        __ add(strU, strU, t0);   // Address of last 8 bytes in UTF-16 string
+        __ add(strL, strL, cnt2); // Address of last 16 bytes in Latin1 string
+        // last 16 characters
+        compare_string_8_x_LU(tmpL, tmpU, strL, strU, DIFF);
+        compare_string_8_x_LU(tmpL, tmpU, strL, strU, DIFF);
+        __ j(DONE);
+      }
+    __ bind(DIFF);
       __ mv(tmpL, t0);
-      __ j(CALCULATE_DIFFERENCE);
-    __ bind(LOAD_LAST);
-      // Last 4 UTF-16 characters are already pre-loaded into tmp4 by compare_string_8_x_LU.
-      // No need to load it again
-      __ mv(tmpU, tmp4);
-      __ ld(tmpL, Address(strL));
-      __ inflate_lo32(tmp3, tmpL);
-      __ mv(tmpL, tmp3);
-      __ xorr(tmp3, tmpU, tmpL);
-      __ beqz(tmp3, DONE);
-
       // Find the first different characters in the longwords and
       // compute their difference.
     __ bind(CALCULATE_DIFFERENCE);
@@ -2464,35 +2480,49 @@ class StubGenerator: public StubCodeGenerator {
     __ add(str1, str1, wordSize);
     __ add(str2, str2, wordSize);
     // less than 16 bytes left?
-    __ sub(cnt2, cnt2, isLL ? 16 : 8);
+    __ sub(cnt2, cnt2, isLL ? 2 * wordSize : wordSize);
     __ push_reg(spilled_regs, sp);
     __ bltz(cnt2, TAIL);
     __ bind(SMALL_LOOP);
       compare_string_16_bytes_same(DIFF, DIFF2);
-      __ sub(cnt2, cnt2, isLL ? 16 : 8);
+      __ sub(cnt2, cnt2, isLL ? 2 * wordSize : wordSize);
       __ bgez(cnt2, SMALL_LOOP);
     __ bind(TAIL);
-      __ addi(cnt2, cnt2, isLL ? 16 : 8);
+      __ addi(cnt2, cnt2, isLL ? 2 * wordSize : wordSize);
       __ beqz(cnt2, LAST_CHECK_AND_LENGTH_DIFF);
-      __ sub(cnt2, cnt2, isLL ? 8 : 4);
+      __ sub(cnt2, cnt2, isLL ? wordSize : wordSize / 2);
       __ blez(cnt2, CHECK_LAST);
       __ xorr(tmp4, tmp1, tmp2);
       __ bnez(tmp4, DIFF);
       __ ld(tmp1, Address(str1));
-      __ addi(str1, str1, 8);
+      __ addi(str1, str1, wordSize);
       __ ld(tmp2, Address(str2));
-      __ addi(str2, str2, 8);
-      __ sub(cnt2, cnt2, isLL ? 8 : 4);
+      __ addi(str2, str2, wordSize);
+      __ sub(cnt2, cnt2, isLL ? wordSize : wordSize / 2);
     __ bind(CHECK_LAST);
       if (!isLL) {
         __ add(cnt2, cnt2, cnt2); // now in bytes
       }
       __ xorr(tmp4, tmp1, tmp2);
       __ bnez(tmp4, DIFF);
-      __ add(str1, str1, cnt2);
-      __ ld(tmp5, Address(str1));
-      __ add(str2, str2, cnt2);
-      __ ld(cnt1, Address(str2));
+      if (AvoidUnalignedAccesses) {
+        // Aligned access. Load bytes from byte-aligned address,
+        // which may contain invalid bytes in last load.
+        // Invalid bytes should be removed before comparison.
+        __ ld(tmp5, Address(str1));
+        __ ld(cnt1, Address(str2));
+        __ neg(cnt2, cnt2);
+        __ slli(cnt2, cnt2, LogBitsPerByte);
+        __ sll(tmp5, tmp5, cnt2);
+        __ sll(cnt1, cnt1, cnt2);
+      } else {
+        // Unaligned access. Load from non-byte aligned address.
+        __ add(str1, str1, cnt2);
+        __ ld(tmp5, Address(str1));
+        __ add(str2, str2, cnt2);
+        __ ld(cnt1, Address(str2));
+      }
+
       __ xorr(tmp4, tmp5, cnt1);
       __ beqz(tmp4, LENGTH_DIFF);
       // Find the first different characters in the longwords and
