@@ -684,7 +684,7 @@ class MacroAssembler: public Assembler {
   void oop_beq(Register obj1, Register obj2, Label& L_equal, bool is_far = false);
   void oop_bne(Register obj1, Register obj2, Label& L_nequal, bool is_far = false);
 
-  void compute_index(Register str1, Register tailing_zero, Register match_mask,
+  void compute_index(Register str1, Register trailing_zero, Register match_mask,
                      Register result, Register char_tmp, Register tmp,
                      bool haystack_isL);
   void compute_match_mask(Register src, Register pattern, Register match_mask,
@@ -693,8 +693,7 @@ class MacroAssembler: public Assembler {
   void inflate_lo32(Register Rd, Register Rs, Register Rtmp1 = t0, Register Rtmp2 = t1);
   void inflate_hi32(Register Rd, Register Rs, Register Rtmp1 = t0, Register Rtmp2 = t1);
 
-  void ctz(Register Rd, Register Rs, bool isLL = false, Register Rtmp1 = t0, Register Rtmp2 = t1);
-  void ctz_bit(Register Rd, Register Rs, Register Rtmp1 = t0, Register Rtmp2 = t1);
+  void ctzc_bit(Register Rd, Register Rs, bool isLL = false, Register Rtmp1 = t0, Register Rtmp2 = t1);
 
   void zero_words(Register base, u_int64_t cnt);
   address zero_words(Register ptr, Register cnt);
