@@ -1114,11 +1114,12 @@ void C2_MacroAssembler::string_equals(Register a1, Register a2,
 
   BLOCK_COMMENT("string_equals {");
 
+  beqz(cnt1, SAME);
   mv(result, false);
 
   // Check for short strings, i.e. smaller than wordSize.
   sub(cnt1, cnt1, wordSize);
-  bltz(cnt1, SHORT);
+  blez(cnt1, SHORT);
 
   // Main 8 byte comparison loop.
   bind(NEXT_WORD); {
@@ -1130,55 +1131,28 @@ void C2_MacroAssembler::string_equals(Register a1, Register a2,
     bne(tmp1, tmp2, DONE);
   } bgtz(cnt1, NEXT_WORD);
 
-  // Last longword.  In the case where length == 4 we compare the
-  // same longword twice, but that's still faster than another
-  // conditional branch.
-  // cnt1 could be 0, -1, -2, -3, -4 for chars; -4 only happens when
-  // length == 4.
-  add(tmp1, a1, cnt1);
-  ld(tmp1, Address(tmp1, 0));
-  add(tmp2, a2, cnt1);
-  ld(tmp2, Address(tmp2, 0));
-  bne(tmp1, tmp2, DONE);
-  j(SAME);
+  if (!AvoidUnalignedAccesses) {
+    // Last longword.  In the case where length == 4 we compare the
+    // same longword twice, but that's still faster than another
+    // conditional branch.
+    // cnt1 could be 0, -1, -2, -3, -4 for chars; -4 only happens when
+    // length == 4.
+    add(tmp1, a1, cnt1);
+    ld(tmp1, Address(tmp1, 0));
+    add(tmp2, a2, cnt1);
+    ld(tmp2, Address(tmp2, 0));
+    bne(tmp1, tmp2, DONE);
+    j(SAME);
+  }
 
   bind(SHORT);
-  Label TAIL03, TAIL01;
-
-  // 0-7 bytes left.
-  andi(t0, cnt1, 4);
-  beqz(t0, TAIL03);
-  {
-    lwu(tmp1, Address(a1, 0));
-    add(a1, a1, 4);
-    lwu(tmp2, Address(a2, 0));
-    add(a2, a2, 4);
-    bne(tmp1, tmp2, DONE);
-  }
-
-  bind(TAIL03);
-  // 0-3 bytes left.
-  andi(t0, cnt1, 2);
-  beqz(t0, TAIL01);
-  {
-    lhu(tmp1, Address(a1, 0));
-    add(a1, a1, 2);
-    lhu(tmp2, Address(a2, 0));
-    add(a2, a2, 2);
-    bne(tmp1, tmp2, DONE);
-  }
-
-  bind(TAIL01);
-  if (elem_size == 1) { // Only needed when comparing 1-byte elements
-    // 0-1 bytes left.
-    andi(t0, cnt1, 1);
-    beqz(t0, SAME);
-    {
-      lbu(tmp1, a1, 0);
-      lbu(tmp2, a2, 0);
-      bne(tmp1, tmp2, DONE);
-    }
-  }
+  ld(tmp1, Address(a1));
+  ld(tmp2, Address(a2));
+  xorr(tmp1, tmp1, tmp2);
+  neg(cnt1, cnt1);
+  slli(cnt1, cnt1, LogBitsPerByte);
+  sll(tmp1, tmp1, cnt1);
+  bnez(tmp1, DONE);
 
   // Arrays are equal.
   bind(SAME);
