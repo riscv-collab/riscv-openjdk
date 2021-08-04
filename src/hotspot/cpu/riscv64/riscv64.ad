@@ -161,9 +161,9 @@ reg_def R31_H   ( SOC, SOC, Op_RegI, 31, x31->as_VMReg()->next());
 // RISCV64 has 32 floating-point registers. Each can store a single
 // or double precision floating-point value.
 
-// for Java use float registers v0-v15 are always save on call whereas
-// the platform ABI treats v8-v15 as callee save). float registers
-// v16-v31 are SOC as per the platform spec
+// for Java use float registers f0-f31 are always save on call whereas
+// the platform ABI treats f8-f9 and f18-f27 as callee save). Other
+// float registers are SOC as per the platform spec
 
 reg_def F0    ( SOC, SOC, Op_RegF,  0,  f0->as_VMReg()          );
 reg_def F0_H  ( SOC, SOC, Op_RegF,  0,  f0->as_VMReg()->next()  );
