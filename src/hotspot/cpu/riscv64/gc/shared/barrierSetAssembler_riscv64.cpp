@@ -179,11 +179,13 @@ void BarrierSetAssembler::eden_allocate(MacroAssembler* masm, Register obj,
     int32_t offset = 0;
     __ bind(retry);
 
+    Register tmp = t0;
+
     // Get the current top of the heap
     ExternalAddress address_top((address) Universe::heap()->top_addr());
-    __ la_patchable(t2, address_top, offset);
-    __ addi(t2, t2, offset);
-    __ lr_d(obj, t2, Assembler::aqrl);
+    __ la_patchable(tmp, address_top, offset);
+    __ addi(tmp, tmp, offset);
+    __ lr_d(obj, tmp, Assembler::aqrl);
 
     // Adjust it my the size of our new object
     if (var_size_in_bytes == noreg) {
@@ -205,7 +207,7 @@ void BarrierSetAssembler::eden_allocate(MacroAssembler* masm, Register obj,
     __ bgtu(end, heap_end, slow_case, is_far);
 
     // If heap_top hasn't been changed by some other thread, update it.
-    __ sc_d(t1, end, t2, Assembler::rl);
+    __ sc_d(t1, end, tmp, Assembler::rl);
     __ bnez(t1, retry);
     incr_allocated_bytes(masm, var_size_in_bytes, con_size_in_bytes, tmp1);
   }
