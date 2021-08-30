@@ -380,7 +380,7 @@ void CompilerConfig::set_compilation_policy_flags() {
     }
 #endif
 
-#if defined AARCH64 || defined RISCV64
+#if defined AARCH64
     if (FLAG_IS_DEFAULT(InlineSmallCode)) {
       FLAG_SET_DEFAULT(InlineSmallCode, 2500);
     }
