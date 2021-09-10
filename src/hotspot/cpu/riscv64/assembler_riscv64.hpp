@@ -336,6 +336,8 @@ public:
   void jal_nc(const Address &adr, Register temp = t0);
   void jr_nc(Register Rs);
   void jalr_nc(Register Rs);
+  void call_nc(const address &dest, Register temp = t0);
+  void tail_nc(const address &dest, Register temp = t0);
 
   static inline uint32_t extract(uint32_t val, unsigned msb, unsigned lsb) {
     assert_cond(msb >= lsb && msb <= 31);
@@ -491,6 +493,12 @@ public:
 #define EMIT_MAY_COMPRESS(COMPRESSED)   \
   EMIT_COMPRESSED(COMPRESSED)
 
+#define EMIT_COMPRESSED_NAME(COMPRESSED, NAME, ARGS)  EMIT_COMPRESSED_NAME_##COMPRESSED(NAME, ARGS)
+#define EMIT_COMPRESSED_NAME_true(NAME, ARGS)         NAME ARGS
+#define EMIT_COMPRESSED_NAME_false(NAME, ARGS)        NAME##_nc ARGS
+#define EMIT_MAY_COMPRESS_NAME(COMPRESSED, NAME, ARGS)   \
+  EMIT_COMPRESSED_NAME(COMPRESSED, NAME, ARGS)
+
 #define COMPRESSED    true
 #define NORMAL        false
 
@@ -549,7 +557,7 @@ public:
     code_section()->relocate(inst_mark(), InternalAddress(dest).rspec());
 
   // Load/store register (all modes)
-#define INSN(NAME, op, funct3, compressed)                                                         \
+#define INSN(NAME, op, funct3, NAME_NC, compressed)                                                \
   void NAME(Register Rd, Register Rs, const int32_t offset) {                                      \
     unsigned insn = 0;                                                                             \
     guarantee(is_offset_in_range(offset, 12), "offset is invalid.");                               \
@@ -569,18 +577,18 @@ public:
       NAME(Rd, Rd, ((int32_t)distance << 20) >> 20);                                               \
     } else {                                                                                       \
       int32_t offset = 0;                                                                          \
-      movptr_with_offset(Rd, dest, offset);                                                        \
+      movptr_with_offset(Rd, dest, offset, compressed);                                            \
       NAME(Rd, Rd, offset);                                                                        \
     }                                                                                              \
   }                                                                                                \
   INSN_ENTRY_RELOC(void, NAME(Register Rd, address dest, relocInfo::relocType rtype))              \
-    NAME(Rd, dest);                                                                                \
+    NAME_NC(Rd, dest);                                                                             \
   }                                                                                                \
   void NAME(Register Rd, const Address &adr, Register temp = t0) {                                 \
     switch(adr.getMode()) {                                                                        \
       case Address::literal: {                                                                     \
         code_section()->relocate(pc(), adr.rspec());                                               \
-        NAME(Rd, adr.target());                                                                    \
+        NAME_NC(Rd, adr.target());                                                                 \
         break;                                                                                     \
       }                                                                                            \
       case Address::base_plus_offset:{                                                             \
@@ -606,19 +614,20 @@ public:
     wrap_label(Rd, L, &Assembler::NAME);                                                           \
   }
 
-  INSN(lb,  0b0000011, 0b000, NORMAL);
-  INSN(lbu, 0b0000011, 0b100, NORMAL);
-  INSN(lh,  0b0000011, 0b001, NORMAL);
-  INSN(lhu, 0b0000011, 0b101, NORMAL);
-  INSN(lw,  0b0000011, 0b010, COMPRESSED);
-  INSN(lwu, 0b0000011, 0b110, NORMAL);
-  INSN(ld,  0b0000011, 0b011, COMPRESSED);
+  INSN(lb,  0b0000011, 0b000, lb,    NORMAL);
+  INSN(lbu, 0b0000011, 0b100, lbu,   NORMAL);
+  INSN(lh,  0b0000011, 0b001, lh,    NORMAL);
+  INSN(lhu, 0b0000011, 0b101, lhu,   NORMAL);
+  INSN(lw,  0b0000011, 0b010, lw_nc, COMPRESSED);
+  INSN(lwu, 0b0000011, 0b110, lwu,   NORMAL);
+  INSN(ld,  0b0000011, 0b011, ld_nc, COMPRESSED);
 
   // C-Ext: uncompressed version
-  INSN(ld_nc,  0b0000011, 0b011, NORMAL);
+  INSN(lw_nc,  0b0000011, 0b010, lw_nc, NORMAL);
+  INSN(ld_nc,  0b0000011, 0b011, ld_nc, NORMAL);
 #undef INSN
 
-#define INSN(NAME, op, funct3, compressed)                                                         \
+#define INSN(NAME, op, funct3, NAME_NC, compressed)                                                \
   void NAME(FloatRegister Rd, Register Rs, const int32_t offset) {                                 \
     unsigned insn = 0;                                                                             \
     guarantee(is_offset_in_range(offset, 12), "offset is invalid.");                               \
@@ -638,18 +647,18 @@ public:
       NAME(Rd, temp, ((int32_t)distance << 20) >> 20);                                             \
     } else {                                                                                       \
       int32_t offset = 0;                                                                          \
-      movptr_with_offset(temp, dest, offset);                                                      \
+      movptr_with_offset(temp, dest, offset, compressed);                                          \
       NAME(Rd, temp, offset);                                                                      \
     }                                                                                              \
   }                                                                                                \
   INSN_ENTRY_RELOC(void, NAME(FloatRegister Rd, address dest, relocInfo::relocType rtype, Register temp = t0)) \
-    NAME(Rd, dest, temp);                                                                          \
+    NAME_NC(Rd, dest, temp);                                                                       \
   }                                                                                                \
   void NAME(FloatRegister Rd, const Address &adr, Register temp = t0) {                            \
     switch(adr.getMode()) {                                                                        \
       case Address::literal: {                                                                     \
         code_section()->relocate(pc(), adr.rspec());                                               \
-        NAME(Rd, adr.target(), temp);                                                              \
+        NAME_NC(Rd, adr.target(), temp);                                                           \
         break;                                                                                     \
       }                                                                                            \
       case Address::base_plus_offset:{                                                             \
@@ -667,11 +676,14 @@ public:
     }                                                                                              \
   }
 
-  INSN(flw, 0b0000111, 0b010, NORMAL);
-  INSN(fld, 0b0000111, 0b011, COMPRESSED);
+  INSN(flw, 0b0000111, 0b010, flw,    NORMAL);
+  INSN(fld, 0b0000111, 0b011, fld_nc, COMPRESSED);
+
+  // C-Ext: uncompressed version
+  INSN(fld_nc, 0b0000111, 0b011, fld_nc, NORMAL);
 #undef INSN
 
-#define INSN(NAME, op, funct3, compressed)                                                               \
+#define INSN(NAME, op, funct3, NAME_NC, compressed)                                                               \
   void NAME(Register Rs1, Register Rs2, const int64_t offset) {                                          \
     unsigned insn = 0;                                                                                   \
     guarantee(is_imm_in_range(offset, 12, 1), "offset is invalid.");                                     \
@@ -697,19 +709,19 @@ public:
     NAME(Rs1, Rs2, offset);                                                                              \
   }                                                                                                      \
   INSN_ENTRY_RELOC(void, NAME(Register Rs1, Register Rs2, address dest, relocInfo::relocType rtype))     \
-    NAME(Rs1, Rs2, dest);                                                                                \
+    NAME_NC(Rs1, Rs2, dest);                                                                             \
   }
 
-  INSN(beq,  0b1100011, 0b000, COMPRESSED);
-  INSN(bne,  0b1100011, 0b001, COMPRESSED);
-  INSN(bge,  0b1100011, 0b101, NORMAL);
-  INSN(bgeu, 0b1100011, 0b111, NORMAL);
-  INSN(blt,  0b1100011, 0b100, NORMAL);
-  INSN(bltu, 0b1100011, 0b110, NORMAL);
+  INSN(beq,  0b1100011, 0b000, beq_nc, COMPRESSED);
+  INSN(bne,  0b1100011, 0b001, bne_nc, COMPRESSED);
+  INSN(bge,  0b1100011, 0b101, bge,  NORMAL);
+  INSN(bgeu, 0b1100011, 0b111, bgeu, NORMAL);
+  INSN(blt,  0b1100011, 0b100, blt,  NORMAL);
+  INSN(bltu, 0b1100011, 0b110, bltu, NORMAL);
 
   // C-Ext: uncompressed version
-  INSN(beq_nc,  0b1100011, 0b000, NORMAL);
-  INSN(bne_nc,  0b1100011, 0b001, NORMAL);
+  INSN(beq_nc,  0b1100011, 0b000, beq_nc, NORMAL);
+  INSN(bne_nc,  0b1100011, 0b001, bne_nc, NORMAL);
 
 #undef INSN
 
@@ -731,7 +743,7 @@ public:
 
 #undef INSN
 
-#define INSN(NAME, REGISTER, op, funct3, compressed)                                                        \
+#define INSN(NAME, REGISTER, op, funct3, NAME_NC, compressed)                                               \
   void NAME(REGISTER Rs1, Register Rs2, const int32_t offset) {                                             \
     unsigned insn = 0;                                                                                      \
     guarantee(is_offset_in_range(offset, 12), "offset is invalid.");                                        \
@@ -747,19 +759,24 @@ public:
     EMIT_MAY_COMPRESS(compressed);                                                                          \
   }                                                                                                         \
   INSN_ENTRY_RELOC(void, NAME(REGISTER Rs, address dest, relocInfo::relocType rtype, Register temp = t0))   \
-    NAME(Rs, dest, temp);                                                                                   \
+    NAME_NC(Rs, dest, temp);                                                                                \
   }
 
-  INSN(sb,  Register,      0b0100011, 0b000, NORMAL);
-  INSN(sh,  Register,      0b0100011, 0b001, NORMAL);
-  INSN(sw,  Register,      0b0100011, 0b010, COMPRESSED);
-  INSN(sd,  Register,      0b0100011, 0b011, COMPRESSED);
-  INSN(fsw, FloatRegister, 0b0100111, 0b010, NORMAL);
-  INSN(fsd, FloatRegister, 0b0100111, 0b011, COMPRESSED);
+  INSN(sb,  Register,      0b0100011, 0b000, sb,     NORMAL);
+  INSN(sh,  Register,      0b0100011, 0b001, sh,     NORMAL);
+  INSN(sw,  Register,      0b0100011, 0b010, sw_nc,  COMPRESSED);
+  INSN(sd,  Register,      0b0100011, 0b011, sd_nc,  COMPRESSED);
+  INSN(fsw, FloatRegister, 0b0100111, 0b010, fsw,    NORMAL);
+  INSN(fsd, FloatRegister, 0b0100111, 0b011, fsd_nc, COMPRESSED);
+
+  // C-Ext: uncompressed version
+  INSN(sw_nc,  Register,      0b0100011, 0b010, sw_nc,  NORMAL);
+  INSN(sd_nc,  Register,      0b0100011, 0b011, sd_nc,  NORMAL);
+  INSN(fsd_nc, FloatRegister, 0b0100111, 0b011, fsd_nc, NORMAL);
 
 #undef INSN
 
-#define INSN(NAME)                                                                                 \
+#define INSN(NAME, NAME_NC, compressed)                                                            \
   void NAME(Register Rs, address dest, Register temp = t0) {                                       \
     assert_cond(dest != NULL);                                                                     \
     assert_different_registers(Rs, temp);                                                          \
@@ -769,7 +786,7 @@ public:
       NAME(Rs, temp, ((int32_t)distance << 20) >> 20);                                             \
     } else {                                                                                       \
       int32_t offset = 0;                                                                          \
-      movptr_with_offset(temp, dest, offset);                                                      \
+      movptr_with_offset(temp, dest, offset, compressed);                                          \
       NAME(Rs, temp, offset);                                                                      \
     }                                                                                              \
   }                                                                                                \
@@ -778,7 +795,7 @@ public:
       case Address::literal: {                                                                     \
         assert_different_registers(Rs, temp);                                                      \
         code_section()->relocate(pc(), adr.rspec());                                               \
-        NAME(Rs, adr.target(), temp);                                                              \
+        NAME_NC(Rs, adr.target(), temp);                                                           \
         break;                                                                                     \
       }                                                                                            \
       case Address::base_plus_offset:{                                                             \
@@ -797,14 +814,18 @@ public:
     }                                                                                              \
   }
 
-  INSN(sb);
-  INSN(sh);
-  INSN(sw);
-  INSN(sd);
+  INSN(sb,    sb,    NORMAL);
+  INSN(sh,    sh,    NORMAL);
+  INSN(sw,    sw_nc, COMPRESSED);
+  INSN(sd,    sd_nc, COMPRESSED);
+
+  // C-Ext: uncompressed version
+  INSN(sw_nc, sw_nc, NORMAL);
+  INSN(sd_nc, sd_nc, NORMAL);
 
 #undef INSN
 
-#define INSN(NAME)                                                                                 \
+#define INSN(NAME, NAME_NC, compressed)                                                            \
   void NAME(FloatRegister Rs, address dest, Register temp = t0) {                                  \
     assert_cond(dest != NULL);                                                                     \
     int64_t distance = (dest - pc());                                                              \
@@ -813,7 +834,7 @@ public:
       NAME(Rs, temp, ((int32_t)distance << 20) >> 20);                                             \
     } else {                                                                                       \
       int32_t offset = 0;                                                                          \
-      movptr_with_offset(temp, dest, offset);                                                      \
+      movptr_with_offset(temp, dest, offset, compressed);                                          \
       NAME(Rs, temp, offset);                                                                      \
     }                                                                                              \
   }                                                                                                \
@@ -821,7 +842,7 @@ public:
     switch(adr.getMode()) {                                                                        \
       case Address::literal: {                                                                     \
         code_section()->relocate(pc(), adr.rspec());                                               \
-        NAME(Rs, adr.target(), temp);                                                              \
+        NAME_NC(Rs, adr.target(), temp);                                                           \
         break;                                                                                     \
       }                                                                                            \
       case Address::base_plus_offset:{                                                             \
@@ -839,8 +860,11 @@ public:
     }                                                                                              \
   }
 
-  INSN(fsw);
-  INSN(fsd);
+  INSN(fsw,    fsw,    NORMAL);
+  INSN(fsd,    fsd_nc, COMPRESSED);
+
+  // C-Ext: uncompressed version
+  INSN(fsd_nc, fsd_nc, NORMAL);
 
 #undef INSN
 
@@ -902,12 +926,8 @@ public:
     } else {                                                                                  \
       assert_different_registers(Rd, temp);                                                   \
       int32_t off = 0;                                                                        \
-      movptr_with_offset(temp, dest, off);                                                    \
-      if (compressed) {                                                                       \
-        jalr(Rd, temp, off);                                                                  \
-      } else {                                                                                \
-        jalr_nc(Rd, temp, off);                                                               \
-      }                                                                                       \
+      movptr_with_offset(temp, dest, off, compressed);                                        \
+      EMIT_MAY_COMPRESS_NAME(compressed, jalr, (Rd, temp, off));                              \
     }                                                                                         \
   }                                                                                           \
   void NAME(Register Rd, Label &L, Register temp = t0) {                                      \
