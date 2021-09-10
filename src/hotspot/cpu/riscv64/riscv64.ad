@@ -1667,6 +1667,7 @@ void BoxLockNode::emit(CodeBuffer &cbuf, PhaseRegAlloc *ra_) const {
   int reg    = ra_->get_encode(this);
 
   if (is_imm_in_range(offset, 12, 0)) {
+    // C-Ext: See BoxLockNode::size(). We need to manually calculate this node's size.
     __ addi_nc(as_Register(reg), sp, offset);
   } else if (is_imm_in_range(offset, 32, 0)) {
     __ li32(t0, offset);
