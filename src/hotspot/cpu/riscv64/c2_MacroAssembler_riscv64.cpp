@@ -1097,10 +1097,8 @@ void C2_MacroAssembler::arrays_equals(Register a1, Register a2, Register tmp3,
 // For Strings we're passed the address of the first characters in a1
 // and a2 and the length in cnt1.
 // elem_size is the element size in bytes: either 1 or 2.
-// There are two implementations.  For arrays >= 8 bytes, all
-// comparisons (including the final one, which may overlap) are
-// performed 8 bytes at a time.  For strings < 8 bytes, we compare a
-// halfword, then a short, and then a byte.
+// All comparisons (including the final one, which may overlap) are
+// performed 8 bytes at a time.
 
 void C2_MacroAssembler::string_equals(Register a1, Register a2,
                                       Register result, Register cnt1, int elem_size)
