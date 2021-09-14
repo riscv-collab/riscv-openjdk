@@ -84,17 +84,16 @@ bool Assembler::emit_compressed_ld_st(unsigned int insn, bool ld) {
   Register rs1 = as_Register(rs1_bits);
   Register rd_rs2 = as_Register(rd_rs2_bits);
   if (funct3 == 0b011) {  // ld/sd
-    // ld/sd(Rd, Address(sp, 8n)), which n >= 0
     if (is_cldsdsp(rs1, rd_rs2, imm12, ld)) {
+      // ld/sd(Rd, Address(sp, 8n)), which n >= 0
       if (ld) {
         c_ldsp(rd_rs2, imm12);
       } else {
         c_sdsp(rd_rs2, imm12);
       }
       return true;
-    } else
-    // ld/sd(compressed_Rd, Address(compressed_Rs, 8n)), which n >= 0
-    if (is_cldsd(rs1, rd_rs2, imm12)) {
+    } else if (is_cldsd(rs1, rd_rs2, imm12)) {
+      // ld/sd(compressed_Rd, Address(compressed_Rs, 8n)), which n >= 0
       if (ld) {
         c_ld(rd_rs2, rs1, imm12);
       } else {
@@ -103,17 +102,16 @@ bool Assembler::emit_compressed_ld_st(unsigned int insn, bool ld) {
       return true;
     }
   } else if (funct3 == 0b010) {  // lw
-    // lw/sw(Rd, Address(sp, 4n)), which n >= 0
     if (is_clwswsp(rs1, rd_rs2, imm12, ld)) {
+      // lw/sw(Rd, Address(sp, 4n)), which n >= 0
       if (ld) {
         c_lwsp(rd_rs2, imm12);
       } else {
         c_swsp(rd_rs2, imm12);
       }
       return true;
-    } else
-    // lw/sw(compressed_Rd, Address(compressed_Rs1, 4n)), which n >= 0
-    if (is_clwsw(rs1, rd_rs2, imm12)) {
+    } else if (is_clwsw(rs1, rd_rs2, imm12)) {
+      // lw/sw(compressed_Rd, Address(compressed_Rs1, 4n)), which n >= 0
       if (ld) {
         c_lw(rd_rs2, rs1, imm12);
       } else {
@@ -143,21 +141,18 @@ bool Assembler::emit_compressed_fld_fst(unsigned int insn, bool ld) {
     // fld/fsd(Rd, Address(sp, 8n)), which n >= 0
     if (as_Register(rs1) == sp &&
         is_unsigned_imm_in_range(imm12, 9, 0) &&
-        (intx(imm12) & 0b111) == 0x0
-        ) {
+        (intx(imm12) & 0b111) == 0x0) {
       if (ld) {
         c_fldsp(as_FloatRegister(rd_rs2), imm12);
       } else {
         c_fsdsp(as_FloatRegister(rd_rs2), imm12);
       }
       return true;
-    } else
-    // ld/sd(compressed_Rd, Address(compressed_Rs, 8n)), which n >= 0
-    if (as_Register(rs1)->is_compressed_valid() &&
+    } else if (as_Register(rs1)->is_compressed_valid() &&
         as_FloatRegister(rd_rs2)->is_compressed_valid() &&
         is_unsigned_imm_in_range(imm12, 8, 0) &&
-        (intx(imm12) & 0b111) == 0x0
-        ) {
+        (intx(imm12) & 0b111) == 0x0) {
+      // ld/sd(compressed_Rd, Address(compressed_Rs, 8n)), which n >= 0
       if (ld) {
         c_fld(as_FloatRegister(rd_rs2), as_Register(rs1), imm12);
       } else {
