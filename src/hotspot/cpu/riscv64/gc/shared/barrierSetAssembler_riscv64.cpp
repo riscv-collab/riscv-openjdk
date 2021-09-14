@@ -238,8 +238,11 @@ void BarrierSetAssembler::nmethod_entry_barrier(MacroAssembler* masm) {
     return;
   }
 
-  // RISCV's amoswap instructions need an alignment for the memory address it swaps
+  // C-Ext: With C-Ext we may come here with a 2-byte alignment, hence an alignment is needed.
+  // See below comments about amo, also native_nmethod_barrier() to find the entry's calculation strategy.
   while ((__ offset() + nmethod_barrier_guard_offset()) % 4 != 0) { __ nop(); }
+
+  int start = __ offset();
 
   Label skip, guard;
   Address thread_disarmed_addr(xthread, in_bytes(bs_nm->thread_disarmed_offset()));
@@ -257,9 +260,11 @@ void BarrierSetAssembler::nmethod_entry_barrier(MacroAssembler* masm) {
   __ jalr_nc(lr, t0, offset);
   __ j(skip);
 
-  __ bind(guard);
+  // RISCV's amoswap instructions need an alignment for the memory address it swaps
+  // C-Ext: So with C-Ext we need to manually align it to 4-byte
+  assert(__ offset() - start == nmethod_barrier_guard_offset() && __ offset() % 4 == 0, "offsets equality and alignment");
 
-  assert(__ offset() % 4 == 0, "RISCV CAS needs an alignment for memory");
+  __ bind(guard);
 
   __ emit_int32(0); // nmethod guard value. Skipped over in common case.
 
