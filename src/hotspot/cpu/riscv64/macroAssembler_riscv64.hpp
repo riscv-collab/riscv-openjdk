@@ -366,12 +366,6 @@ class MacroAssembler: public Assembler {
 
   void should_not_reach_here(bool compressed = true) { stop("should not reach here", compressed); }
 
-  virtual RegisterOrConstant delayed_value_impl(intptr_t* delayed_value_addr,
-                                                Register tmp,
-                                                int offset) {
-    return RegisterOrConstant(tmp);
-  }
-
   static address target_addr_for_insn(address insn_addr);
 
   // Required platform-specific helpers for Label::patch_instructions.
