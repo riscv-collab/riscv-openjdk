@@ -2762,7 +2762,7 @@ void MacroAssembler::far_call(Address entry, CodeBuffer *cbuf, Register tmp) {
     jalr_nc(x1, tmp, offset); // link
   } else {
     if (cbuf != NULL) { cbuf->set_insts_mark(); }
-    jal(entry); // link
+    jal_nc(entry); // link
   }
 }
 
