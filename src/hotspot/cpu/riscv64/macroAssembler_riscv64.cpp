@@ -3193,7 +3193,9 @@ address MacroAssembler::emit_trampoline_stub(int insts_call_instruction_offset,
 
   // make sure 4 byte aligned here, so that the destination address would be
   // 8 byte aligned after 3 intructions
-  while (offset() % wordSize == 0) { nop(); }
+  // C-Ext: when we reach here we may get a 2-byte alignment and
+  //   nop() will be 2 bytes in length.
+  while (offset() % wordSize != 4) { nop(); }
 
   relocate(trampoline_stub_Relocation::spec(code()->insts()->start() +
                                             insts_call_instruction_offset));
@@ -3208,6 +3210,7 @@ address MacroAssembler::emit_trampoline_stub(int insts_call_instruction_offset,
   bind(target);
   assert(offset() - stub_start_offset == NativeCallTrampolineStub::data_offset,
          "should be");
+  assert(offset() % wordSize == 0, "address loaded by ld must be 8-byte aligned under riscv64");
   emit_int64((intptr_t)dest);
 
   const address stub_start_addr = addr_at(stub_start_offset);
